@@ -22,8 +22,8 @@ use_sim_time: True
 headless: False  # If True, the node will not publish visualization markers for particles (useful for performance in large environments)
 
 
-meta_lambda: 0.72  # Exponential recency weighting factor for Meta-MH 
-random_steps: 150  # Number of random walk steps per odometry update (tune based on your robot's motion characteristics)
+meta_lambda: 0.1  # Exponential recency weighting factor for Meta-MH 
+random_steps: 50  # Number of random walk steps per odometry update (tune based on your robot's motion characteristics)
 
 #=======================================
 # Motion model parameters
