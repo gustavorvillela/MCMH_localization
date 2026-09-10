@@ -67,7 +67,7 @@ STYLE_INTERNAL = {
         1: '*',
     },
 }
-LIST_PARTICLES_HEATMAP = [10, 50, 100]
+LIST_PARTICLES_HEATMAP = [10, 50, 500]
 
 def extract_particles(filename):
     match = re.search(r'_(\d+)p_', filename)
@@ -1276,6 +1276,7 @@ def plot_heatmap_internal(data_internal, plot_dir):
                 cmap="crest",
                 xticklabels=list_decay_factor,
                 yticklabels=list_nb_step,
+                fmt=".4f"
             )
             ax.set(xlabel="Decay factor (gamma)", ylabel="Random walk steps count")
 
@@ -1346,11 +1347,11 @@ def process_results_dir_internal(results_dir):
 
     # print(f"[DEBUG] data_internal={data_internal}")
 
-    plot_internal_data("memory_use", data_internal, plots_dir, which="rw")
-    plot_internal_data("cpu_use", data_internal, plots_dir, which="rw")
+    # plot_internal_data("memory_use", data_internal, plots_dir, which="rw")
+    # plot_internal_data("cpu_use", data_internal, plots_dir, which="rw")
     # plot_internal_data("mean_memory_use", data_internal, plots_dir)
     # plot_internal_data("mean_cpu_use", data_internal, plots_dir)
-    plot_internal_rmse_nb_part(data_internal, plots_dir)
+    # plot_internal_rmse_nb_part(data_internal, plots_dir)
     plot_heatmap_internal(data_internal, plots_dir)
 
 def process_results_dir(results_dir, results_root):
