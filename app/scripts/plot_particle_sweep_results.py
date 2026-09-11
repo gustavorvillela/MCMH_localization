@@ -10,6 +10,7 @@ import matplotlib.lines as mlines
 import matplotlib.ticker as ticker
 import psutil as ps
 import subprocess
+import seaborn as sns
 
 list_algos = ['MCL', 'AMCL', 'MHMCL', 'MHAMCL', 'AMHMCL', 'AMHAMCL', '3MCL']
 
@@ -34,42 +35,40 @@ METRIC_KEYS = [
     "memory_use"
 ]
 STYLE_MARKER = {
-    5: '^',
-    10: 'h',
+    5: '_',
+    10: 'o',
     50: '|',
-    100: 'o',
-    300: 's',
     500: 'v',
-    700: '.',
-    1000: '_',
-    1500: '1',
-    2000: 'x',
-    2500: '+',
-    3000: '3'
-    #'other': '>H<^p38xP+2,4X*'
+    1000: '*',
+    2000: '.',
+    2500: 'x',
+    3000: 's',
     }
-ALGO_SUPER = ''
-STYLE_SUPER = {
-    'color':{
-        '10':"#E69F00",
-        '30':"#009E73",
-        '50':"#0072B2",
-        '70':"#CC79A7",
-        '80':"#000000",
-        #'other': ["#56B4E9", "#F0E442", "#D55E00"]
+STYLE_INTERNAL = {
+    'particles':{
+        5:"#000000",
+        10:"#E69F00",
+        50:"#56B4E9",
+        500:"#009E73",
+        1000:"#F0E442",
+        2000:"#0072B2",
+        2500:"#D55E00",
+        3000:"#CC79A7",
     },
-    'marker':{
-        10: 'h',  
-        50: '|',
-        100: 'o',
-        300: 's',
-        500: 'v',
-        700: '.',
-        1000: '_',
-        1500: '1'
-        #'other': '>H<^p38xP+2,4X*'
-    }
+    'rw':{
+        10: 'x',
+        50: 'o',
+        80: '>',
+        100: 's',
+    },
+    'decay':{
+        0.1: '|',
+        0.5: '_',
+        0.8: '.',
+        1: '*',
+    },
 }
+LIST_PARTICLES_HEATMAP = [10, 50, 500]
 
 def extract_particles(filename):
     match = re.search(r'_(\d+)p_', filename)
@@ -94,36 +93,32 @@ def extract_scenario(filename):
     # remove monitor_ prefix if present
     name = name.replace("monitor_", "")
 
-    # remove particle specification
-    name = re.sub(r'_\d+p_', '_', name)
+    # remove monitor_ prefix if present
+    name = name.replace("time_cycle_", "")
+
+    # remove particle specification and what is after
+    name = re.sub(r'_\d+p_.*', '_', name)
 
     # remove algorithm names
     for algo in list_algos:
         name = name.replace("_" + algo, "")
 
-    # remove run index if present
-    name = re.sub(r'_run\d+', '', name)
-
     return name.strip("_")
 
 # Action: Extract witch run procude the result from the file name
 # I/ filename: String
-# O/ run: String
-# Necessity: A filename where every data is separate by "_" and where the run number is the last one
-# Produce: A string run wi9tch only contain the number of the run
+# O/ run: Integer | None
+# Produce: A string run which only contain the number of the run if in filename, None else
 def extract_run (filename) :
     '''
     Action: Extract witch run procude the result from the file name \\
     I/ filename: String \\
-    O/ run: String \\
-    Necessity: A filename where every data is separate by "_" and where the run number is the last one \\
-    Produce: A string run wi9tch only contain the number of the run
+    O/ run: Integer | None \\
+    Produce: A string run which only contain the number of the run if in filename, None else
     '''
 
-    name = filename.replace(".txt", "")
-    parts = name.split('_')
-    run = parts[-1]
-    return run.replace('run', '')
+    match = re.search(r'_run(\d+)', filename)
+    return int(match.group(1)) if match else None
 
 def extract_rmse(filepath):
     rmse_pos = None
@@ -139,11 +134,30 @@ def extract_rmse(filepath):
         print(f"Erro lendo {filepath}: {e}")
     return rmse_pos, rmse_yaw
 
-def extract_random_steps(config_dir):
-    return config_dir.split('/')[-1]
+def extract_random_steps(filename):
+    '''
+    Action: Extract number of random walk from file name \\
+    I/ filename: String \\
+    O/ run: Integer | None \\
+    Produce: A Interger with the number of random step walk if in filename, None else
+    '''
+
+    match = re.search(r'_(\d+)rw_', filename)
+    return int(match.group(1)) if match else None
+
+def extract_decay_factor(filename):
+    '''
+    Action: Extract the decay factor from file name \\
+    I/ filename: String \\
+    O/ run: Integer | None \\
+    Produce: A Interger with the decay factor if in filename, None else
+    '''
+
+    match = re.search(r'_([0-9]+([.][0-9]*)?|[.][0-9]+)df', filename)
+    return float(match.group(1)) if match else None
 
 def extract_config(config_dir):
-    return config_dir.split('/')[-2]
+    return config_dir.split('/')[-1]
 
 def normalize_yaw(angle):
     return np.arctan2(np.sin(angle), np.cos(angle))
@@ -210,10 +224,24 @@ def extract_neff(filepath):
                 if not line:
                     continue
                 if line[0].isdigit():
-                    neff.append(int(float(line)))
+                    neff.append(float(line))
     except Exception as e:
         print(f"Error opening {filepath} in extract_neff: {e}")
     return neff
+
+def extract_time_cycle(filepath):
+    L_times = []
+    try:
+        with open(filepath, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                if line[0].isdigit():
+                    L_times.append(float(line))
+    except Exception as e:
+        print(f"Error opening {filepath} in extract_neff: {e}")
+    return L_times
 
 # Action: Extract cpu and memory monitoring from file
 # I/ filepath: String a path to file
@@ -401,7 +429,7 @@ def plot_rmse(data, scenario, plot_path, test="pos", stat="mean",styles=None):
                 linewidth=2
             )
 
-    plt.semilogy()
+    #plt.semilogy()
     plt.grid(True, linestyle='--', alpha=0.4)
     plt.legend()
     plt.tight_layout()
@@ -636,7 +664,6 @@ def plot_ess(scenario, best_info, data_metrics, plots_dir, styles=None):
 
     for algo, (particles, run) in best_info.items():
         ess = data_metrics[scenario][algo][particles][run].get("effective_sample_size", [])
-        ess = [val/particles for val in ess]
         if not ess:
             print(f"Warning: No ESS data for {scenario} | {algo} | {particles}p | run {run}")
             continue
@@ -749,7 +776,7 @@ def plot_monitoring(metric, scenario, best_info, data_metrics, plots_dir, styles
         print(f"No {metric} plot generated for {scenario}: no {metric} samples found.")
         return
 
-    if metric == "memory_use" : plt.yscale('log')
+    #if metric == "memory_use" : plt.yscale('log')
     plt.grid(True, linestyle='--', alpha=0.4)
     plt.legend()
     plt.tight_layout()
@@ -859,21 +886,15 @@ def plot_monitoring_vs_rmse_all_in_one(metric, scenario, data_metrics, data, plo
     Produce: One plot of the metric over rmse with one color per algorithms and one shape per number of particle saved as scenario_metric_rmse_all.png
     '''
 
-    global processor
-    global freq
-
-    D_metrics = {
-        "cpu_use": f"Equivalent time of run (in seconds) for one core \n on {processor} at {round(freq)} MHz",
-        "memory_use": "Max memory use (in MByte)"
-    }
+    is_mean = 'mean' in metric
+    metric = metric.replace("mean_", "")
 
     styles = styles or {}
     plt.figure(figsize=(8, 6))
 
     title = f"RMSE vs {metric} use - {scenario}"
     plt.title(title)
-    plt.ylabel("Position RMSE (m)")
-    plt.xlabel(f"{D_metrics[metric]}")
+    ylabel = "Position RMSE (m)"
 
     plot_path = os.path.join(plots_dir, f"{scenario}_{metric}_rmse_all.png")
     plotted = False     
@@ -887,21 +908,42 @@ def plot_monitoring_vs_rmse_all_in_one(metric, scenario, data_metrics, data, plo
             list_data = []
             list_rmse = []
             for run in data_metrics[scenario][algo][particles] :
-                val = data_metrics[scenario][algo][particles][run].get(metric)
-                if metric == 'memory_use' :
+                val = data_metrics[scenario][algo][particles][run].get(metric.replace("mean_", ""))
+                if 'memory' in metric :
                     list_data.append(np.max(val) * 1e-6)
-                elif metric == 'cpu_use' :
-                    list_data.append(np.mean(val) * data_metrics[scenario][algo][particles][run].get('time') / 100)
+                    xlabel = "Memory use (in MByte)"
+                elif 'time_cycle' in metric :
+                    list_data.append(val)
+                    xlabel = "Average time (in seconds) of one cycle of the algorithms"
                 list_rmse.append(data[scenario][algo][particles]["pos"][int(run)-1])
 
             style = styles.get(algo, {'color': '#666666', 'linestyle': '-', 'marker': 'o', 'label': algo})
 
-            plt.scatter(
-                y=list_rmse,
-                x=list_data,
-                color=style['color'],
-                marker=STYLE_MARKER[particles]
-            )
+            if is_mean:
+                x_pos = np.mean(list_data)
+                mean_xlabel = "Mean " + xlabel
+
+                plt.ylabel(ylabel)
+                plt.xlabel(mean_xlabel)
+
+                plt.scatter(
+                    y=np.mean(list_rmse),
+                    x=x_pos,
+                    color=style['color'],
+                    marker=STYLE_MARKER[particles],
+                    zorder=3,
+                    s=200,
+                )
+            else:
+                plt.ylabel(ylabel)
+                plt.xlabel(xlabel)
+
+                plt.scatter(
+                    y=list_rmse,
+                    x=list_data,
+                    color=style['color'],
+                    marker=STYLE_MARKER[particles],
+                )
             plotted = True
 
     if not plotted:
@@ -915,7 +957,7 @@ def plot_monitoring_vs_rmse_all_in_one(metric, scenario, data_metrics, data, plo
     for entry in list_algo :
         handles.append(mpatches.Patch(color=styles[entry]['color'], label=entry))
 
-    plt.semilogy()
+    #plt.semilogy()
     plt.grid(True, linestyle='--', alpha=0.4)
     plt.legend(handles=handles)
     plt.tight_layout()
@@ -1210,6 +1252,116 @@ def discover_result_dirs(results_root):
 
     return sorted(set(result_dirs))
 
+def plot_heatmap_internal(data_internal, plot_dir):
+
+    list_config = data_internal.keys()
+    for config in list_config:
+        for particle in LIST_PARTICLES_HEATMAP:
+            fig, ax = plt.subplots()
+
+            fig.figsize=(8, 6)
+            ax.set_title(f"Heatmap of RMSE for random_walk_steps_count x gamma for {particle}p")
+
+            list_nb_step = list(data_internal[config].keys()).copy()
+            list_decay_factor = list(data_internal[config][list_nb_step[0]].keys()).copy()
+            list_nb_step.sort()
+            list_decay_factor.sort()
+
+            data = np.empty((len(list_nb_step), len(list_decay_factor)))
+
+            # data_internal[config][nb_steps_walk][decay_factor][particles] = (memo, cpu, rmse)
+
+            for i in range(len(list_nb_step)):
+                for j in range(len(list_decay_factor)):
+                    data[i, j] = np.mean(data_internal[config][list_nb_step[i]][list_decay_factor[j]][particle]['rmse'])
+
+            ax = sns.heatmap(
+                data=data,
+                annot=True,
+                cmap="crest",
+                xticklabels=list_decay_factor,
+                yticklabels=list_nb_step,
+                fmt=".4f"
+            )
+            ax.set(xlabel="Decay factor (gamma)", ylabel="Random walk steps count")
+
+            plot_path = os.path.join(plot_dir, f"internal_heatmap_{particle}p.png")
+            plt.tight_layout()
+            fig.tight_layout()
+            fig.savefig(plot_path, dpi=200)
+            plt.close()
+
+    print(f"Internal heatmap plot saved at: {plot_dir}")
+
+
+def process_results_dir_internal(results_dir):
+    plots_dir = os.path.join(results_dir, 'plots')
+    os.makedirs(plots_dir, exist_ok=True)
+
+    # Structure:
+    # data_internal[config][nb_steps_walk][decay_factor][particles] = (memo, cpu, rmse)
+    data_internal = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {
+        'memo':[],
+        'cpu':[],
+        'rmse':[],
+    }))))
+
+    for filename in os.listdir(results_dir):
+        if not filename.endswith(".txt"):
+            continue
+
+        if filename == "summary_results.txt":
+            continue
+
+        file_path = os.path.join(results_dir, filename)
+
+        if filename.startswith("poses_"):
+            continue
+
+        elif filename.startswith("neff_"):
+            continue
+
+        elif filename.startswith("time_cycle_"):
+            continue
+        
+        elif filename.startswith("monitor_"):
+            algo = extract_algorithm(filename)
+            particles = extract_particles(filename)
+            config = extract_config(results_dir)
+            nb_steps_walk = extract_random_steps(filename)
+            decay_factor = extract_decay_factor(filename)
+            run = extract_run(filename)
+
+            if algo and particles:
+                t, cpu, mem = extract_monitor(file_path)
+                data_internal[config][nb_steps_walk][decay_factor][particles]['memo'].append(np.max(mem))
+                data_internal[config][nb_steps_walk][decay_factor][particles]['cpu'].append(np.mean(cpu))
+
+        else:
+            algo = extract_algorithm(filename)
+            particles = extract_particles(filename)
+            config = extract_config(results_dir)
+            nb_steps_walk = extract_random_steps(filename)
+            decay_factor = extract_decay_factor(filename)
+            run = extract_run(filename)
+
+            if algo and particles:
+                rmse_pos, rmse_yaw = extract_rmse(file_path)
+                if (rmse_pos is not None) and (rmse_yaw is not None):
+                    data_internal[config][nb_steps_walk][decay_factor][particles]['rmse'].append(rmse_pos)
+
+    if not data_internal:
+        print(f"No valid data found in {results_dir}.")
+
+    # print(f"[DEBUG] data_internal={data_internal}")
+
+    # plot_internal_data("memory_use", data_internal, plots_dir, which="rw")
+    # plot_internal_data("cpu_use", data_internal, plots_dir, which="rw")
+    # plot_internal_data("mean_memory_use", data_internal, plots_dir)
+    # plot_internal_data("mean_cpu_use", data_internal, plots_dir)
+    # plot_internal_rmse_nb_part(data_internal, plots_dir)
+    plot_heatmap_internal(data_internal, plots_dir)
+
 def process_results_dir(results_dir, results_root):
     plots_dir = os.path.join(results_dir, 'plots')
     os.makedirs(plots_dir, exist_ok=True)
@@ -1234,7 +1386,7 @@ def process_results_dir(results_dir, results_root):
         "cpu_use": [],
         "memory_use": [],
         "time":None
-    }))))
+    }))))        
 
     for filename in os.listdir(results_dir):
         if not filename.endswith(".txt"):
@@ -1290,10 +1442,22 @@ def process_results_dir(results_dir, results_root):
             if algo and particles:
                 print(f"{filename}")
                 t, cpu, mem = extract_monitor(file_path)
-                data_metrics[scenario][algo][particles][run]["cpu_use"] = cpu
+                #data_metrics[scenario][algo][particles][run]["cpu_use"] = cpu
                 data_metrics[scenario][algo][particles][run]["memory_use"] = mem
                 data_metrics[scenario][algo][particles][run]["time"] = t
-                print(f"Loaded cpu and memory usage from: {filename} | {report_label}/{scenario} | {algo} | {particles}p | run {run}")
+                print(f"Loaded memory usage from: {filename} | {report_label}/{scenario} | {algo} | {particles}p | run {run}")
+
+        elif filename.startswith("time_cycle"):
+            algo = extract_algorithm(filename)
+            particles = extract_particles(filename)
+            scenario = extract_scenario(filename)
+            run = extract_run(filename)
+
+            if algo and particles:
+                print(f"{filename}")
+                time = extract_time_cycle(file_path)
+                data_metrics[scenario][algo][particles][run]["time_cycle"] = np.mean(time)
+                print(f"Loaded time cycle from: {filename} | {report_label}/{scenario} | {algo} | {particles}p | run {run}")
 
         else:
             algo = extract_algorithm(filename)
@@ -1335,9 +1499,7 @@ def process_results_dir(results_dir, results_root):
                 p: summarize_metric_bucket(p_dict[p])
                 for p in sorted(p_dict.keys())
             }
-            if algo == ALGO_SUPER:
-                get_data_super(results_dir, scenario, p_dict.keys(), data, data_metrics)
-        
+            
         # --- Plot everything for this scenario 
         pos_mean_plot_path = os.path.join(plots_dir, f"{scenario}_particle_sweep_rmse.png")
         plot_rmse(avg_data, scenario, pos_mean_plot_path, test="pos", stat="mean", styles=styles)
@@ -1389,8 +1551,8 @@ def process_results_dir(results_dir, results_root):
             styles=styles
         )
         
-        plot_monitoring_vs_rmse_all_in_one("memory_use", scenario, data_metrics, data, plots_dir, styles)
-        plot_monitoring_vs_rmse_all_in_one("cpu_use", scenario, data_metrics, data, plots_dir, styles)
+        plot_monitoring_vs_rmse_all_in_one("mean_memory_use", scenario, data_metrics, data, plots_dir, styles)
+        plot_monitoring_vs_rmse_all_in_one("mean_time_cycle", scenario, data_metrics, data, plots_dir, styles)
 
         # --- Find best (lowest RMSE position) ---
         summary_path = os.path.join(results_dir, "summary_results.txt")
@@ -1412,51 +1574,8 @@ def process_results_dir(results_dir, results_root):
         plot_QQ (scenario, best_per_algo, plots_dir, styles)
 
         plot_ess (scenario, best_info, data_metrics, plots_dir, styles)
-
-        #plot_monitoring("cpu_use", scenario, best_info, data_metrics, plots_dir, styles)
-        #plot_monitoring("memory_use", scenario, best_info, data_metrics, plots_dir, styles)
         
     generate_html_report(data, plots_dir, True, report_label)
-
-# Action: Add the monitored data into global dictionnary
-# I/ results_dir: path-like object to the analysed file
-# I/ scenario: String
-# I/ d_particles: Dictionnary of number of particles
-# I/ data_metrics: Dictionnary of the metrics collected for every run
-# I/ data: Dictionary of metrics saved for every run
-# I/ algo=ALGO_SUPER: String
-# O/ Nothing
-# Necessity: A dictionnary data_metrics matching the spec in main(),
-#           results_dir a valid path,
-#           scenario a valid senario,
-#           data matching the output of unpack_best_per_algo,
-#           d_particles having all and every number of particles as keys,
-#           and algo the algorithms to study
-# Produce: Add in data_super the memory, cpu and rmse for each run of this algo
-def get_data_super(results_dir, scenario, d_particles, data, data_metrics, algo=ALGO_SUPER):
-    '''
-    Action: Add the monitored data into global dictionnary \\
-    I/ results_dir: path-like object to the analysed file \\
-    I/ scenario: String \\
-    I/ d_particles: Dictionnary of number of particles \\
-    I/ data_metrics: Dictionnary of the metrics collected for every run \\
-    I/ data: Dictionary of metrics saved for every run \\
-    I/ algo=ALGO_SUPER: String \\
-    O/ Nothing \\
-    Necessity: A dictionnary data_metrics matching the spec in main(), results_dir a valid path, scenario a valid senario, data matching the output of unpack_best_per_algo, d_particles having all and every number of particles as keys, and algo the algorithms to study \\
-    Produce: Add in data_super the memory, cpu and rmse for each run of this algo
-    '''
-
-    global data_super
-
-    config = extract_config(results_dir)
-    nb_steps = extract_random_steps(results_dir)
-
-    for particles in d_particles:
-        memo = [np.max(data_metrics[scenario][algo][particles][run].get('memory_use')) for run in data_metrics[scenario][algo][particles]]
-        cpu = [np.mean(data_metrics[scenario][algo][particles][run].get('cpu_use')) for run in data_metrics[scenario][algo][particles]]
-        rmse = data[scenario][algo][particles]["pos"].copy()
-        data_super[config][nb_steps][particles] = (memo, cpu, rmse)
 
 # Action: Plot the choiced monitoring over rmse
 # I/ metric: String
@@ -1469,7 +1588,7 @@ def get_data_super(results_dir, scenario, d_particles, data, data_metrics, algo=
 #               "mean_memory_use"
 # Produce: One plot of the metric over rmse saved as 
 #           {config}_{ALGO_SUPER}_{metric}-rmse.png if ALGO_SUPER not ''
-def plot_super(metric, plot_dir, style=STYLE_SUPER):
+def plot_internal_data(metric, data_internal, plot_dir, style=STYLE_INTERNAL, which="both"):
     '''
     Action: Plot the choiced monitoring over rmse \\
     I/ metric: String \\
@@ -1477,69 +1596,187 @@ def plot_super(metric, plot_dir, style=STYLE_SUPER):
     I/ styles: Dictionnary that record the style to use for particles and number of random_steps \\
     O/ Nothing \\
     Necessity: plots_dir a valid path and metric to be "cpu_use", "memory_use", "mean_cpu_use" or "mean_memory_use" \\
-    Produce: One plot of the metric over rmse saved as {config}_{ALGO_SUPER}_{metric}-rmse.png if ALGO_SUPER not ''
+    Produce: One plot of the metric over rmse saved as {config}_internal_{metric}-rmse.png
     '''
 
-    global data_super
-
-    if ALGO_SUPER == '':
-        return
-
-    plt.figure(figsize=(8, 6))
-
-    plt.title(f"{ALGO_SUPER} - {metric.replace('_', ' ').upper()} vs RMSE for diffrents number of random_steps and number of particle")
-    plt.xlabel("Position RMSE (m)")
+    # data_internal[config][nb_steps_walk][decay_factor][particles] = (memo, cpu, rmse)
 
     list_particles = []
-    list_config = data_super.keys()
+    list_config = data_internal.keys()
     for config in list_config:
-        list_nb_step = data_super[config].keys()
-        for nb_steps in list_nb_step :
-            list_part = data_super[config][nb_steps].keys()
-            for particles in list_part:
-                if particles not in list_particles:
-                    list_particles.append(particles)
-                x = data_super[config][nb_steps][particles][-1]
-                if metric == "memory_use" :
-                    y = [val * 1e-6 for val in data_super[config][nb_steps][particles][0]]
-                    plt.ylabel("Memory use (MBytes)")
-                elif metric == "cpu_use" :
-                    y = [val for val in data_super[config][nb_steps][particles][1]]
-                    plt.ylabel("CPU use (Percentage for one cpu)")
-                elif metric == "mean_cpu_use" :
-                    y = np.mean([val for val in data_super[config][nb_steps][particles][1]])
-                    x = np.mean(x)
-                    plt.ylabel("Mean CPU use (Percentage for one cpu)")
-                    plt.xlabel("Mean position RMSE (m)")
-                elif metric == "mean_memory_use" :
-                    y = np.mean([val * 1e-6 for val in data_super[config][nb_steps][particles][0]])
-                    x = np.mean(x)
-                    plt.ylabel("Mean memory use (MBytes)")
-                    plt.xlabel("Mean position RMSE (m)")
+        list_nb_step = list(data_internal[config].keys()).copy()
+        list_decay_factor = list(data_internal[config][list_nb_step[0]].keys()).copy()
+
+        if not which == 'decay':
+            for nb_steps in list_nb_step :
+                plt.figure(figsize=(8, 6))    
+                plt.title(f"{metric.replace('_', ' ').upper()} vs RMSE for {nb_steps} random_steps")
+
+                for decay_factor in list_decay_factor:
+                    list_part = data_internal[config][nb_steps][decay_factor].keys()
+                    for particles in list_part:
+                        if particles not in list_particles:
+                            list_particles.append(particles)
+                        if metric == "memory_use" :
+                            x = [val * 1e-6 for val in data_internal[config][nb_steps][decay_factor][particles]['memo']]
+                            y = data_internal[config][nb_steps][decay_factor][particles]['rmse']
+                            plt.xlabel("Memory use (MBytes)")
+                            plt.ylabel("Position RMSE (m)")
+                        elif metric == "cpu_use" :
+                            x = [val for val in data_internal[config][nb_steps][decay_factor][particles]['cpu']]
+                            y = data_internal[config][nb_steps][decay_factor][particles]['rmse']
+                            plt.xlabel("CPU use (Percentage for one cpu)")
+                            plt.ylabel("Position RMSE (m)")
+                        elif metric == "mean_cpu_use" :
+                            x = np.mean([val for val in data_internal[config][nb_steps][decay_factor][particles]['cpu']])
+                            y = np.mean(data_internal[config][nb_steps][decay_factor][particles]['rmse'])
+                            plt.xlabel("Mean CPU use (Percentage for one cpu)")
+                            plt.ylabel("Mean position RMSE (m)")
+                        elif metric == "mean_memory_use" :
+                            x = np.mean([val * 1e-6 for val in data_internal[config][nb_steps][decay_factor][particles]['memo']])
+                            y = np.mean(data_internal[config][nb_steps][decay_factor][particles]['rmse'])
+                            plt.xlabel("Mean memory use (MBytes)")
+                            plt.ylabel("Mean position RMSE (m)")
+
+                        plt.scatter(
+                            x=x,
+                            y=y,
+                            marker=style['decay'][float(decay_factor)],
+                            color=style['particles'][int(particles)],
+                        )
+
+                handles = []
+                list_particles.sort()
+                list_decay_factor.sort()
+                for entry in  list_decay_factor:
+                    handles.append(mlines.Line2D([], [], color='black', marker=style['decay'][float(entry)], label='gamma='+str(entry), linewidth=0))
+                for entry in list_particles :
+                    handles.append(mpatches.Patch(color=style['particles'][int(entry)], label=str(entry)+'p'))
+
+                plot_path = os.path.join(plot_dir, f"{config}_internal_{metric}-rmse_for_{nb_steps}rw.png")
+                plt.grid(True, linestyle='--', alpha=0.4)
+                plt.legend(handles=handles)
+                plt.tight_layout()
+                plt.savefig(plot_path, dpi=200)
+                plt.close()
+
+        if not which == "rw":
+            for decay_factor in list_decay_factor :
+                plt.figure(figsize=(8, 6))    
+                plt.title(f"{metric.replace('_', ' ').upper()} vs RMSE for gamma {decay_factor}")
+
+                for nb_steps in list_nb_step:
+                    list_part = data_internal[config][nb_steps][decay_factor].keys()
+                    for particles in list_part:
+                        if particles not in list_particles:
+                            list_particles.append(particles)
+                        if metric == "memory_use" :
+                            x = [val * 1e-6 for val in data_internal[config][nb_steps][decay_factor][particles]['memo']]
+                            y = data_internal[config][nb_steps][decay_factor][particles]['rmse']
+                            plt.xlabel("Memory use (MBytes)")
+                            plt.ylabel("Position RMSE (m)")
+                        elif metric == "cpu_use" :
+                            x = [val for val in data_internal[config][nb_steps][decay_factor][particles]['cpu']]
+                            y = data_internal[config][nb_steps][decay_factor][particles]['rmse']
+                            plt.xlabel("CPU use (Percentage for one cpu)")
+                            plt.ylabel("Position RMSE (m)")
+                        elif metric == "mean_cpu_use" :
+                            x = np.mean([val for val in data_internal[config][nb_steps][decay_factor][particles]['cpu']])
+                            y = np.mean(data_internal[config][nb_steps][decay_factor][particles]['rmse'])
+                            plt.xlabel("Mean CPU use (Percentage for one cpu)")
+                            plt.ylabel("Mean position RMSE (m)")
+                        elif metric == "mean_memory_use" :
+                            x = np.mean([val * 1e-6 for val in data_internal[config][nb_steps][decay_factor][particles]['memo']])
+                            y = np.mean(data_internal[config][nb_steps][decay_factor][particles]['rmse'])
+                            plt.xlabel("Mean memory use (MBytes)")
+                            plt.ylabel("Mean position RMSE (m)")
+
+                        plt.scatter(
+                            x=x,
+                            y=y,
+                            marker=style['rw'][int(nb_steps)],
+                            color=style['particles'][int(particles)],
+                        )
+                    
+                handles = []
+                list_particles.sort()
+                list_nb_step.sort()
+                for entry in list_nb_step :
+                    handles.append(mlines.Line2D([], [], color='black', marker=style['rw'][int(entry)], label=str(entry)+'random steps', linewidth=0))
+                for entry in list_particles :
+                    handles.append(mpatches.Patch(color=style['particles'][int(entry)], label=str(entry)+"p"))
+
+                plot_path = os.path.join(plot_dir, f"internal_{metric}-rmse_for_gamma{decay_factor}.png")
+                plt.grid(True, linestyle='--', alpha=0.4)
+                plt.legend(handles=handles)
+                plt.tight_layout()
+                plt.savefig(plot_path, dpi=200)
+                plt.close()
+
+    print(f"Internal {metric} memory-rmse plot saved at: {plot_dir}")
+
+def plot_internal_rmse_nb_part(data_internal, plot_dir, style=STYLE_INTERNAL):
+
+    list_config = data_internal.keys()
+    for config in list_config:
+        list_nb_step = list(data_internal[config].keys()).copy()
+        list_decay_factor = list(data_internal[config][list_nb_step[0]].keys()).copy()
+        list_nb_step.sort()
+        list_decay_factor.sort()
+
+        # data_internal[config][nb_steps_walk][decay_factor][particles] = (memo, cpu, rmse)
+
+        for decay in list_decay_factor:
+            plt.figure(figsize=(8, 6))
                 
-                plt.scatter(
-                    x=x,
-                    y=y,
-                    color=style['color'][nb_steps],
-                    marker=style['marker'][particles]
+            plt.title(f"RMSE vs nb_particles - diffrents random_steps_count - gamma={decay}")
+            plt.ylabel("Position RMSE (m)")
+            plt.xlabel("Number of particles")
+
+            for nb_steps in list_nb_step:
+                x = list(data_internal[config][nb_steps][decay].keys())
+                x.sort()
+                y = [np.mean(data_internal[config][nb_steps][decay][part]['rmse']) for part in x]
+
+                plt.plot(
+                    x, y,
+                    label=f"{nb_steps} random steps",
+                    marker=style['rw'][int(nb_steps)],
                 )
 
-        handles = []
-        list_particles.sort()
-        for entry in list_particles :
-            handles.append(mlines.Line2D([], [], color='black', marker=style['marker'][entry], label=str(entry)+' particles', linewidth=0))
-        for entry in list_nb_step :
-            handles.append(mpatches.Patch(color=style['color'][entry], label=str(entry)+' random_steps'))
+            plot_path = os.path.join(plot_dir, f"internal_rmse-part_gamma{decay}.png")
+            plt.grid(True, linestyle='--', alpha=0.4)
+            plt.legend()
+            plt.tight_layout()
+            plt.savefig(plot_path, dpi=200)
+            plt.close()
 
-        plot_path = os.path.join(plot_dir, f"{config}_{ALGO_SUPER}_{metric}-rmse.png")
-        plt.xlim(left=0)
-        plt.grid(True, linestyle='--', alpha=0.4)
-        plt.legend(handles=handles)
-        plt.tight_layout()
-        plt.savefig(plot_path, dpi=200)
-        plt.close()
-        print(f"{ALGO_SUPER} {metric} memory-rmse plot saved at: {plot_path}")
+        for nb_steps in list_nb_step:
+            plt.figure(figsize=(8, 6))
+                
+            plt.title(f"RMSE vs nb_particles - diffrents gamma - {nb_steps} random_steps")
+            plt.ylabel("Position RMSE (m)")
+            plt.xlabel("Number of particles")
 
+            for decay in list_decay_factor:
+                x = list(data_internal[config][nb_steps][decay].keys())
+                x.sort()
+                y = [np.mean(data_internal[config][nb_steps][decay][part]['rmse']) for part in x]
+
+                plt.plot(
+                    x, y,
+                    label=f"gamma = {decay}",
+                    marker=style['rw'][float(nb_steps)],
+                )
+
+            plot_path = os.path.join(plot_dir, f"internal_rmse-part_{nb_steps}_random_steps.png")
+            plt.legend()
+            plt.grid(True, linestyle='--', alpha=0.4)
+            plt.tight_layout()
+            plt.savefig(plot_path, dpi=200)
+            plt.close()
+            
+    print(f"Internal rmse-nb_part plots saved at: {plot_dir}")
 
 def main():
     results_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../results'))
@@ -1558,19 +1795,10 @@ def main():
     for results_dir in result_dirs:
         print(f"\nProcessing particle sweep plots in: {results_dir}")
 
-        config = extract_config(results_dir)
-        if config not in data_super.keys() :
-            data_super[config] = {}
-        step = extract_random_steps(results_dir)
-        if step not in data_super[config].keys() :
-            data_super[config][step] = {}
-        process_results_dir(results_dir, results_root)
-
-    results_root = os.path.join(results_root, "plots")
-    plot_super("memory_use", results_root)
-    plot_super("cpu_use", results_root)
-    plot_super("mean_memory_use", results_root)
-    plot_super("mean_cpu_use", results_root)
+        if 'internal' in results_dir:
+            process_results_dir_internal(results_dir)
+        else:
+            process_results_dir(results_dir, results_root)
 
 def generate_html_report(all_data, results_dir, same_dir=False, report_label=None):
 
@@ -1619,7 +1847,7 @@ def generate_html_report(all_data, results_dir, same_dir=False, report_label=Non
         recall_plot_t1 = f"{scenario}_recall_rates_recall_t1.png"
         recall_plot_t2 = f"{scenario}_recall_rates_recall_t2.png"
         recall_plot_t3 = f"{scenario}_recall_rates_recall_t3.png"
-        cpu_rmse_plot = f"{scenario}_cpu_use_rmse_all.png"
+        time_cycle_rmse_plot = f"{scenario}_time_cycle_rmse_all.png"
         memory_rmse_plot = f"{scenario}_memory_use_rmse_all.png"
         prefix = "" if same_dir else "plots/"
 
@@ -1647,7 +1875,7 @@ def generate_html_report(all_data, results_dir, same_dir=False, report_label=Non
             <img src="{prefix}{best_qq}">
         </div>
         <div style="display:grid; grid-template-columns:repeat(2, 1fr); width:100%">
-            <img src="{prefix}{cpu_rmse_plot}">
+            <img src="{prefix}{time_cycle_rmse_plot}">
             <img src="{prefix}{memory_rmse_plot}">
         </div>
         """
