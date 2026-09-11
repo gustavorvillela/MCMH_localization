@@ -14,6 +14,7 @@ class Evaluator:
         self.mh_topic = rospy.get_param("~mh_topic", "/mh_rate")
         self.robot_name = rospy.get_param("~robot_name", "turtlebot3_waffle")
         self.Neff = rospy.get_param("~effective_sample_size", "/effective_sample_size")
+        self.Time_Cycle = rospy.get_param("~time_cycle", "/time_cycle")
 
         result_param = rospy.get_param("~result_name", "eval")
         default_results_dir = os.path.abspath(
@@ -32,12 +33,14 @@ class Evaluator:
 
         self.poses_file = os.path.join(results_dir, f"poses_{result_name}.txt")
         self.neff_file = os.path.join(results_dir, f"neff_{result_name}.txt")
+        self.cycle_file = os.path.join(results_dir, f"time_cycle_{result_name}.txt")
 
         self.gt_pose = None
         self.mh_rate = None
         self.eval_start_time = None
         
         self.Neff_history = []
+        self.Time_Cycle_history = []
 
         # Store poses
         self.pose_history = []
@@ -46,6 +49,7 @@ class Evaluator:
         rospy.Subscriber(self.gt_topic, ModelStates, self.gt_callback)
         rospy.Subscriber(self.mh_topic, Float64, self.mh_callback)
         rospy.Subscriber(self.Neff, Float64, self.neff_callback)
+        rospy.Subscriber(self.Time_Cycle, Float64, self.time_cycle_callback)
 
     def get_yaw_from_pose(self, pose):
         quat = [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
@@ -99,6 +103,10 @@ class Evaluator:
         #print(f"[Test] : Neff={msg.data}")
         self.Neff_history.append(msg.data)
 
+    def time_cycle_callback (self, msg) :
+        #print(f"[Test] : Neff={msg.data}")
+        self.Time_Cycle_history.append(msg.data)
+
     def run(self):
         rospy.loginfo("Recording poses only...")
         rospy.spin()
@@ -121,6 +129,13 @@ class Evaluator:
             for data in self.Neff_history:
                 f.write(
                     f"{data:.4f}\n"
+                )
+
+        with open(self.cycle_file, "w") as f:
+            f.write("Time_Per_Cycle\n")
+            for data in self.Time_Cycle_history:
+                f.write(
+                    f"{data}\n"
                 )
         
         rospy.loginfo(f"Data saved to: {self.poses_file}")

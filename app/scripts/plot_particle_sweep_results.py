@@ -93,6 +93,9 @@ def extract_scenario(filename):
     # remove monitor_ prefix if present
     name = name.replace("monitor_", "")
 
+    # remove monitor_ prefix if present
+    name = name.replace("time_cycle_", "")
+
     # remove particle specification and what is after
     name = re.sub(r'_\d+p_.*', '_', name)
 
@@ -225,6 +228,20 @@ def extract_neff(filepath):
     except Exception as e:
         print(f"Error opening {filepath} in extract_neff: {e}")
     return neff
+
+def extract_time_cycle(filepath):
+    L_times = []
+    try:
+        with open(filepath, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                if line[0].isdigit():
+                    L_times.append(float(line))
+    except Exception as e:
+        print(f"Error opening {filepath} in extract_neff: {e}")
+    return L_times
 
 # Action: Extract cpu and memory monitoring from file
 # I/ filepath: String a path to file
@@ -895,9 +912,9 @@ def plot_monitoring_vs_rmse_all_in_one(metric, scenario, data_metrics, data, plo
                 if 'memory' in metric :
                     list_data.append(np.max(val) * 1e-6)
                     xlabel = "Memory use (in MByte)"
-                elif 'cpu' in metric :
-                    list_data.append(np.mean(val))
-                    xlabel = "CPU use (% of one cpu)"
+                elif 'time_cycle' in metric :
+                    list_data.append(val)
+                    xlabel = "Average time (in seconds) of one cycle of the algorithms"
                 list_rmse.append(data[scenario][algo][particles]["pos"][int(run)-1])
 
             style = styles.get(algo, {'color': '#666666', 'linestyle': '-', 'marker': 'o', 'label': algo})
@@ -1303,6 +1320,9 @@ def process_results_dir_internal(results_dir):
 
         elif filename.startswith("neff_"):
             continue
+
+        elif filename.startswith("time_cycle_"):
+            continue
         
         elif filename.startswith("monitor_"):
             algo = extract_algorithm(filename)
@@ -1422,10 +1442,22 @@ def process_results_dir(results_dir, results_root):
             if algo and particles:
                 print(f"{filename}")
                 t, cpu, mem = extract_monitor(file_path)
-                data_metrics[scenario][algo][particles][run]["cpu_use"] = cpu
+                #data_metrics[scenario][algo][particles][run]["cpu_use"] = cpu
                 data_metrics[scenario][algo][particles][run]["memory_use"] = mem
                 data_metrics[scenario][algo][particles][run]["time"] = t
-                print(f"Loaded cpu and memory usage from: {filename} | {report_label}/{scenario} | {algo} | {particles}p | run {run}")
+                print(f"Loaded memory usage from: {filename} | {report_label}/{scenario} | {algo} | {particles}p | run {run}")
+
+        elif filename.startswith("time_cycle"):
+            algo = extract_algorithm(filename)
+            particles = extract_particles(filename)
+            scenario = extract_scenario(filename)
+            run = extract_run(filename)
+
+            if algo and particles:
+                print(f"{filename}")
+                time = extract_time_cycle(file_path)
+                data_metrics[scenario][algo][particles][run]["time_cycle"] = np.mean(time)
+                print(f"Loaded time cycle from: {filename} | {report_label}/{scenario} | {algo} | {particles}p | run {run}")
 
         else:
             algo = extract_algorithm(filename)
@@ -1520,7 +1552,7 @@ def process_results_dir(results_dir, results_root):
         )
         
         plot_monitoring_vs_rmse_all_in_one("mean_memory_use", scenario, data_metrics, data, plots_dir, styles)
-        plot_monitoring_vs_rmse_all_in_one("mean_cpu_use", scenario, data_metrics, data, plots_dir, styles)
+        plot_monitoring_vs_rmse_all_in_one("mean_time_cycle", scenario, data_metrics, data, plots_dir, styles)
 
         # --- Find best (lowest RMSE position) ---
         summary_path = os.path.join(results_dir, "summary_results.txt")
@@ -1815,7 +1847,7 @@ def generate_html_report(all_data, results_dir, same_dir=False, report_label=Non
         recall_plot_t1 = f"{scenario}_recall_rates_recall_t1.png"
         recall_plot_t2 = f"{scenario}_recall_rates_recall_t2.png"
         recall_plot_t3 = f"{scenario}_recall_rates_recall_t3.png"
-        cpu_rmse_plot = f"{scenario}_cpu_use_rmse_all.png"
+        time_cycle_rmse_plot = f"{scenario}_time_cycle_rmse_all.png"
         memory_rmse_plot = f"{scenario}_memory_use_rmse_all.png"
         prefix = "" if same_dir else "plots/"
 
@@ -1843,7 +1875,7 @@ def generate_html_report(all_data, results_dir, same_dir=False, report_label=Non
             <img src="{prefix}{best_qq}">
         </div>
         <div style="display:grid; grid-template-columns:repeat(2, 1fr); width:100%">
-            <img src="{prefix}{cpu_rmse_plot}">
+            <img src="{prefix}{time_cycle_rmse_plot}">
             <img src="{prefix}{memory_rmse_plot}">
         </div>
         """

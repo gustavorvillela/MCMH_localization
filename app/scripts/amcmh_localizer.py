@@ -173,6 +173,7 @@ class AMCMHLocalizer:
         self.marker_pub = rospy.Publisher('/mcmh_particles', MarkerArray, queue_size=10)
         self.acc_rate = rospy.Publisher('/mh_rate', Float64, queue_size=10)
         self.Neff_pub = rospy.Publisher('/effective_sample_size', Float64, queue_size=10)
+        self.Time_cycle = rospy.Publisher('/time_cycle', Float64, queue_size=10)
 
         # TF
         self.tf_broadcaster = tf2_ros.TransformBroadcaster()
@@ -394,6 +395,7 @@ class AMCMHLocalizer:
 
     def lidar_callback(self, msg):
 
+        start = time.time()
         
         self.accept_odom = False
         #print(f"[DEBUG] Total odom steps used: {self.odom_count}")
@@ -474,6 +476,10 @@ class AMCMHLocalizer:
         self.publish_estimate(msg.header.stamp)
         if not self.headless :
             self.publish_particles(msg.header.stamp)
+
+        end = time.time()
+
+        self.Time_cycle.publish(Float64(end - start))
 
     def update_scans(self,scan):
 
@@ -972,6 +978,8 @@ class AMCMHLocalizer:
             self.pose_pub.publish(pose)
 
     def sync_callback(self, scan_msg, odom_msg):
+
+        start = time.time()
         
         # 1. MOVE: Apply Odometry first
         # This keeps particles_prev and particles at the same size
@@ -1021,6 +1029,10 @@ class AMCMHLocalizer:
             self.publish_particles(stamp)
         self.publish_estimate(stamp)
         #print(f"[DEBUG] Publishing took {time.time() - t:.4f} seconds")
+
+        end = time.time()
+        
+        self.Time_cycle.publish(Float64(end - start))
 
 if __name__ == '__main__':
     try:
