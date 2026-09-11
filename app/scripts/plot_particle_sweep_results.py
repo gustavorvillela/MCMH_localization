@@ -114,7 +114,7 @@ def extract_run (filename) :
     Produce: A string run which only contain the number of the run if in filename, None else
     '''
 
-    match = re.search(r'_run(\d+)_', filename)
+    match = re.search(r'_run(\d+)', filename)
     return int(match.group(1)) if match else None
 
 def extract_rmse(filepath):
@@ -221,7 +221,7 @@ def extract_neff(filepath):
                 if not line:
                     continue
                 if line[0].isdigit():
-                    neff.append(int(float(line)))
+                    neff.append(float(line))
     except Exception as e:
         print(f"Error opening {filepath} in extract_neff: {e}")
     return neff
@@ -893,7 +893,7 @@ def plot_monitoring_vs_rmse_all_in_one(metric, scenario, data_metrics, data, plo
             for run in data_metrics[scenario][algo][particles] :
                 val = data_metrics[scenario][algo][particles][run].get(metric.replace("mean_", ""))
                 if 'memory' in metric :
-                    list_data.append(np.mean(val) * 1e-6)
+                    list_data.append(np.max(val) * 1e-6)
                     xlabel = "Memory use (in MByte)"
                 elif 'cpu' in metric :
                     list_data.append(np.mean(val))
