@@ -412,7 +412,7 @@ def plot_rmse(data, scenario, plot_path, test="pos", stat="mean",styles=None):
                 linewidth=2
             )
 
-    plt.semilogy()
+    #plt.semilogy()
     plt.grid(True, linestyle='--', alpha=0.4)
     plt.legend()
     plt.tight_layout()
@@ -759,7 +759,7 @@ def plot_monitoring(metric, scenario, best_info, data_metrics, plots_dir, styles
         print(f"No {metric} plot generated for {scenario}: no {metric} samples found.")
         return
 
-    if metric == "memory_use" : plt.yscale('log')
+    #if metric == "memory_use" : plt.yscale('log')
     plt.grid(True, linestyle='--', alpha=0.4)
     plt.legend()
     plt.tight_layout()
@@ -938,7 +938,7 @@ def plot_monitoring_vs_rmse_all_in_one(metric, scenario, data_metrics, data, plo
                     y=list_rmse,
                     x=list_data,
                     color=style['color'],
-                    marker=STYLE_MARKER[particles]
+                    marker=STYLE_MARKER[particles],
                 )
             plotted = True
 
@@ -953,7 +953,7 @@ def plot_monitoring_vs_rmse_all_in_one(metric, scenario, data_metrics, data, plo
     for entry in list_algo :
         handles.append(mpatches.Patch(color=styles[entry]['color'], label=entry))
 
-    plt.semilogy()
+    #plt.semilogy()
     plt.grid(True, linestyle='--', alpha=0.4)
     plt.legend(handles=handles)
     plt.tight_layout()
@@ -1676,7 +1676,7 @@ def plot_internal_data(metric, data_internal, plot_dir, style=STYLE_INTERNAL, wh
                             x=x,
                             y=y,
                             marker=style['rw'][int(nb_steps)],
-                            color=style['particles'][int(particles)]
+                            color=style['particles'][int(particles)],
                         )
                     
                 handles = []
