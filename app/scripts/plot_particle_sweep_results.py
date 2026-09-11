@@ -35,6 +35,7 @@ METRIC_KEYS = [
     "memory_use"
 ]
 STYLE_MARKER = {
+    5: '_',
     10: 'o',
     50: '|',
     500: 'v',
@@ -45,6 +46,7 @@ STYLE_MARKER = {
     }
 STYLE_INTERNAL = {
     'particles':{
+        5:"#000000",
         10:"#E69F00",
         50:"#56B4E9",
         500:"#009E73",
@@ -52,7 +54,6 @@ STYLE_INTERNAL = {
         2000:"#0072B2",
         2500:"#D55E00",
         3000:"#CC79A7",
-        #200:"#000000",
     },
     'rw':{
         10: 'x',
