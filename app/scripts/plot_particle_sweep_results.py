@@ -909,26 +909,13 @@ def plot_monitoring_vs_rmse_all_in_one(metric, scenario, data_metrics, data, plo
                 plt.ylabel(ylabel)
                 plt.xlabel(mean_xlabel)
 
-                box_width = max(abs(x_pos) * 0.05, 1e-6)
-                box = plt.boxplot(
-                    list_rmse,
-                    positions=[x_pos],
-                    widths=box_width,
-                    patch_artist=True,
-                    manage_ticks=False,
-                )
-                for element in ('boxes', 'whiskers', 'caps', 'medians'):
-                    plt.setp(box[element], color=style['color'])
-                for patch in box['boxes']:
-                    patch.set_facecolor(style['color'])
-                    patch.set_alpha(0.4)
-
                 plt.scatter(
-                    y=[np.median(list_rmse)],
-                    x=[x_pos],
+                    y=np.mean(list_rmse),
+                    x=x_pos,
                     color=style['color'],
                     marker=STYLE_MARKER[particles],
                     zorder=3,
+                    s=200,
                 )
             else:
                 plt.ylabel(ylabel)
