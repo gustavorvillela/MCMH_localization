@@ -8,12 +8,12 @@
 MODES=("3MCL")   # Can adjust as desired
 PARTICLE_COUNTS=(10 50 500 1000 2000 2500 3000)  # particle counts to test
 STEPS_COUNTS=(10 50 80 100)  # particle counts to test
-DECAY_FACTOR=(0.1 0.5 0.8 1) # Decay factor for 3MCL
+DECAY_FACTOR=(0.1 0.5 0.8 1.0) # Decay factor for 3MCL
 SCENARIOS=(M)  # C=Conservative, M=Medium, A=Aggressive
 RESULTS_DIR="$(rospack find mcmh_localization)/results/internal"
 DEFAULT_BAG_DIR="$(rospack find mcmh_localization)/bags"
 PARAMS_DIR="$(rospack find mcmh_localization)/params"
-REPEATS=1   # number of repeats per configuration
+REPEATS=50   # number of repeats per configuration
 CLEAR=1   # Clean the results dir?
 MODEL="turtlebot3_${TURTLEBOT3_MODEL:-waffle}"  # TurtleBot3 model (waffle or burger)
 mkdir -p "$RESULTS_DIR"
